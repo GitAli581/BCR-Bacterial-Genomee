@@ -181,7 +181,7 @@ for col, words in word_summary.items():
         print(f"  {word}: {count}")
 
 # ─── The inference of the host groups ──────────────────
-print("\n🔧 Inferring missing 'Host Group' values based on context...")
+print("\n🔧 Inferring missing 'Host Group'")
 def infer_host_group(row):
     source = row.get("Isolation Source", "").lower()
     host = row.get("Host Common Name", "").lower()

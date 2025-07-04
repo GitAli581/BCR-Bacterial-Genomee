@@ -100,7 +100,6 @@ category_rules = {
         "Antibiotic Resistant": ["resistance", "beta-lactamase", "multidrug", "bla", "mecA"]
     }
 }
-}
 
 def clean_name(name: str) -> str:
     return name.replace("(", "").replace(")", "").replace(" ", "_").replace("-", "_")

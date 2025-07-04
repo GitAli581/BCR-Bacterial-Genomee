@@ -165,7 +165,7 @@ for combo in combinations:
 print("The Combination filtering is finally completed :D. Check out 'categorized_combinations/'")
 
 # ─── Most frequent words analyzed  ──────────────────
-print("\n🔍 Analyzing for most frequent words in each column...")
+print("\n🔍 Every column is being analyzed for the most frequent words *sigh*")
 min_word_len = 4
 stopwords = set(["from", "with", "and", "the", "this", "that", "which", "for", "site", "data", "sample"])
 word_summary = {}
@@ -200,10 +200,10 @@ df.to_csv(os.path.join("categorized_output", "host_group_inferred.csv"), index=F
 print("✅ Inferred Host Group values saved to: categorized_output/host_group_inferred.csv")
 
 # ─── The clustering of the text columns ──────────────────
-print("\n🚀 Running TF-IDF + KMeans clustering for discovery of latent categories...")
+print("\n🚀 Running TF-IDF + KMeans now demonstrates the latent categories have been discovered")
 text_cols = [col for col in df.columns if df[col].dtype == object and df[col].nunique() > 10]
 for col in text_cols:
-    print(f"\n🔬 Clustering column: {col}")
+    print(f"\n🔬 This column is being clustered: {col}")
     text_data = df[col].astype(str)
     vectorizer = TfidfVectorizer(stop_words='english', max_features=100)
     X = vectorizer.fit_transform(text_data)

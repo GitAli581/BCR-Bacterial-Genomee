@@ -102,7 +102,7 @@ category_rules = {
 }
 
 def clean_name(name: str) -> str:
-    return name.replace("(", "").replace(")", "").replace(" ", "_").replace("-", "_")
+    return name.replace("(", "").replace(")", "").replace(" ", "_").replace("-", "_").replace("/", "_")
 
 # ─── Loading up the data ──────────────────
 df = pd.read_csv("input.csv").fillna("")

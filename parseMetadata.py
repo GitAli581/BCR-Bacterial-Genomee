@@ -8,6 +8,128 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import KMeans
 import numpy as np
 
+
+# ─── Utility related work ────────────────────────────────────────────────────────────────
+def parse_args():
+    parser = argparse.ArgumentParser(description="Enhanced Categorization Tool")
+    parser.add_argument("input_file", help="Input .csv/.tsv (optionally .bz2 compressed) file")
+    parser.add_argument("--output-dir", default="categorized_output", help="Directory for category outputs")
+    parser.add_argument("--combo-dir", default="categorized_combinations", help="Combo filters directory")
+    return parser.parse_args()
+
+def read_input_file(input_file):
+    if input_file.endswith(".bz2"):
+        with bz2.open(input_file, "rt") as f:
+            if input_file.endswith(".tsv.bz2"):
+                return pd.read_csv(f, sep="\t").fillna("")
+            else:
+                return pd.read_csv(f).fillna("")
+    elif input_file.endswith(".tsv"):
+        return pd.read_csv(input_file, sep="\t").fillna("")
+    else:
+        return pd.read_csv(input_file).fillna("")
+
+def clean_name(name: str) -> str:
+    return name.replace("(", "").replace(")", "").replace(" ", "_").replace("-", "_").replace("/", "_")
+
+# ─── Reporting on Metadata and its validation  ────────────────────────────────────────────────
+def drop_uninformative_columns(df, threshold=0.90):
+    dropped = []
+    for col in df.columns:
+        if df[col].dtype == object and df[col].nunique() > threshold * len(df):
+            dropped.append(col)
+    return df.drop(columns=dropped), dropped
+
+def metadata_completeness_report(df):
+    report = []
+    for col in df.columns:
+        filled = df[col].astype(bool).sum()
+        pct = round(100 * filled / len(df), 2)
+        unique = df[col].nunique()
+        top_vals = df[col].value_counts().head(5).to_dict()
+        report.append({"Column": col, "% Filled": pct, "# Unique": unique, "Top 5 Values": top_vals})
+    return pd.DataFrame(report)
+
+def validate_column_presence(df, required_cols):
+    missing = [col for col in required_cols if col not in df.columns]
+    return missing
+
+def calculate_quality_score(row, key_columns):
+    present = sum(bool(row[col]) for col in key_columns if col in row)
+    return int(100 * present / len(key_columns))
+
+def calculate_mixs_compliance(row, mixs_fields):
+    present = sum(bool(row.get(col, "").strip()) for col in mixs_fields)
+    return int(100 * present / len(mixs_fields)) if mixs_fields else 0
+
+def apply_temporal_binning(df):
+    if 'collection_date' in df.columns:
+        df['collection_year'] = pd.to_datetime(df['collection_date'], errors='coerce').dt.year
+        df['collection_decade'] = (df['collection_year'] // 10 * 10).fillna("Unknown")
+
+# ─── Normalization of ontology  ───────────────────────────────────────────────
+def normalize_column_ontology(df, columns):
+    for col in columns:
+        if col in df.columns:
+            df[f"{col}_normalized"] = df[col].str.lower().str.strip()
+
+# ─── Columns for multi clustering ──────────────────────────────────────────────────────────
+def cluster_combined_text(df):
+    text_cols = df.select_dtypes(include='object').columns
+    df_combined = df[text_cols].astype(str).apply(lambda row: " ".join(row.values), axis=1)
+    tfidf = TfidfVectorizer(max_features=200, stop_words='english')
+    X = tfidf.fit_transform(df_combined)
+    model = KMeans(n_clusters=4, random_state=42, n_init=10)
+    return model.fit_predict(X)
+
+# ─── the new improved script ──────────────────────────────────────────────────────────────────────
+def main():
+    args = parse_args()
+    df = read_input_file(args.input_file)
+    df_lower = df.applymap(lambda x: x.lower() if isinstance(x, str) else x)
+
+    os.makedirs(args.output_dir, exist_ok=True)
+    os.makedirs(args.combo_dir, exist_ok=True)
+
+    # Drop uninformative columns
+    df, dropped_cols = drop_uninformative_columns(df)
+    with open(os.path.join(args.output_dir, "dropped_columns.txt"), "w") as f:
+        for col in dropped_cols:
+            f.write(f"{col}\n")
+
+    # Validate required metadata fields
+    required_cols = ["Host Common Name", "Isolation Source", "Host Group"]
+    missing = validate_column_presence(df, required_cols)
+    with open(os.path.join(args.output_dir, "missing_required_columns.txt"), "w") as f:
+        for col in missing:
+            f.write(f"{col}\n")
+
+    # Metadata completeness summary
+    report = metadata_completeness_report(df)
+    report.to_csv(os.path.join(args.output_dir, "metadata_completeness_report.csv"), index=False)
+
+    # Apply temporal binning
+    apply_temporal_binning(df)
+
+    # Ontology normalization placeholder
+    normalize_column_ontology(df, required_cols)
+
+    # Quality and MIxS compliance scoring
+    mixs_fields = required_cols + ["Habitat Type", "Genome Status", "Genome Type"]
+    df['metadata_quality_score'] = df.apply(lambda row: calculate_quality_score(row, required_cols), axis=1)
+    df['mixs_compliance_score'] = df.apply(lambda row: calculate_mixs_compliance(row, mixs_fields), axis=1)
+
+    # Clustering across all text
+    df['all_columns_cluster'] = cluster_combined_text(df)
+
+    # Save updated dataframe with all new features
+    df.to_csv(os.path.join(args.output_dir, "improved_metadata.csv"), index=False)
+
+    print("✅ The new improvements have been completed:", args.output_dir)
+
+if __name__ == "__main__":
+    main()
+
 # ─── Category definitions (use the exact CSV column names)  ─────────────────────────────────────────────────────
 category_rules = {
     "Host Common Name": {
@@ -244,3 +366,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

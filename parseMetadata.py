@@ -50,6 +50,31 @@ def metadata_completeness_report(df):
         report.append({"Column": col, "% Filled": pct, "# Unique": unique, "Top 5 Values": top_vals})
     return pd.DataFrame(report)
 
+def report_ofthe_category(df, df_lower, output_dir):
+    report = []
+    for column, subcats in category_rules.items():
+        if column == "Genome Type":
+            continue
+        elif column == "any_column":
+            continue
+        elif column not in df_lower.columns:
+            continue
+        matched_total = set()
+        for cat, keywords in subcats.items():
+            matched = df_lower[column].apply(lambda x: any(k in x for k in keywords))
+            matched_total.update(matched[matched].index.tolist())
+        matched_count = len(matched_total)
+        unmatched_count = len(df) - matched_count
+        coverage = {
+            "Column": column,
+            "Matched Entries": matched_count,
+            "Unmatched Entries": unmatched_count,
+            "% Matched": round(100 * matched_count / len(df), 2)
+        }
+        report.append(coverage)
+    pd.DataFrame(report).to_csv(os.path.join(output_dir, "report_ofthe_category.csv"), index=False)
+
+
 def validate_column_presence(df, required_cols):
     missing = [col for col in required_cols if col not in df.columns]
     return missing

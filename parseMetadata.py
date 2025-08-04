@@ -319,6 +319,8 @@ def main():
 
     print("The Categorization is complete :D.", output_dir)
 
+    report_ofthe_category(df, df_lower, output_dir)
+
     # ─── The filters for combinations ───────────────────────────────────────────────────
     os.makedirs(combo_dir, exist_ok=True)
     combinations = [

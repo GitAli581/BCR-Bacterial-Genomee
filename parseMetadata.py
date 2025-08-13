@@ -189,64 +189,6 @@ def guess_missing_for_all_objects(df, output_dir, min_missing=1):
             processed.append(col)
     return processed
 
-def main():
-    args = parse_args()
-    df = read_input_file(args.input_file)
-    df_lower = df.applymap(lambda x: x.lower() if isinstance(x, str) else x)
-
-    os.makedirs(args.output_dir, exist_ok=True)
-    os.makedirs(args.combo_dir, exist_ok=True)
-
-    # Drop the columns that have no information
-    df, dropped_cols = drop_uninformative_columns(df)
-    with open(os.path.join(args.output_dir, "dropped_columns.txt"), "w") as f:
-        for col in dropped_cols:
-            f.write(f"{col}\n")
-
-    # Validate required metadata fields
-    required_cols = ["Host Common Name", "Isolation Source", "Host Group"]
-    missing = validate_column_presence(df, required_cols)
-    with open(os.path.join(args.output_dir, "missing_required_columns.txt"), "w") as f:
-        for col in missing:
-            f.write(f"{col}\n")
-
-    # Metadata completeness summary
-    report = metadata_completeness_report(df)
-    report.to_csv(os.path.join(args.output_dir, "metadata_completeness_report.csv"), index=False)
-
-    # Apply temporal binning
-    apply_temporal_binning(df)
-
-    # Ontology normalization placeholder
-    normalize_column_ontology(df, required_cols)
-
-    # Quality and MIxS compliance scoring
-    mixs_fields = required_cols + ["Habitat Type", "Genome Status", "Genome Type"]
-    df['metadata_quality_score'] = df.apply(lambda row: calculate_quality_score(row, required_cols), axis=1)
-    df['mixs_compliance_score'] = df.apply(lambda row: calculate_mixs_compliance(row, mixs_fields), axis=1)
-
-    # Clustering across all text
-    df['all_columns_cluster'] = cluster_combined_text(df)
-
-    # Save updated dataframe with all new features
-    df.to_csv(os.path.join(args.output_dir, "improved_metadata.csv"), index=False)
-
-    try:
-        os.makedirs(output_dir, exist_ok=True)
-        processed_cols = guess_missing_for_all_objects(df, output_dir=output_dir, min_missing=1)
-        if processed_cols:
-            guessed_all_path = os.path.join(output_dir, "data_with_guesses.csv")
-            df.to_csv(guessed_all_path, index=False)
-            print(f"\n  Dataframe has been written with columns properly guessed: {guessed_all_path}")
-        else:
-            print("\n  There are no columns that need values to guess.")
-    except Exception as e:
-        print(f"There is a problem with guessing categories: {e}")
-    
-    print("✅ The new improvements have been completed:", args.output_dir)
-
-if __name__ == "__main__":
-    main()
 
 # ─── Category definitions (use the exact CSV column names)  ─────────────────────────────────────────────────────
 category_rules = {
@@ -482,6 +424,18 @@ def main():
         df[[col, f"{col}_cluster"]].to_csv(cluster_out, index=False)
         print(f"  ➤ Saved: {cluster_out}")
 
+    try:
+        os.makedirs(output_dir, exist_ok=True)
+        processed_cols = guess_missing_for_all_objects(df, output_dir=output_dir, min_missing=1)
+        if processed_cols:
+            guessed_all_path = os.path.join(output_dir, "data_with_guesses.csv")
+            df.to_csv(guessed_all_path, index=False)
+            print(f"\n  Dataframe has been written with columns properly guessed: {guessed_all_path}")
+        else:
+            print("\n  There are no columns that need values to guess.")
+    except Exception as e:
+        print(f"There is a problem with guessing categories: {e}")
+    
     print("\n The tasks are completed!! :).")
 
 if __name__ == "__main__":

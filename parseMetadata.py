@@ -108,6 +108,87 @@ def cluster_combined_text(df):
     return model.fit_predict(X)
 
 # ─── the new improved script ──────────────────────────────────────────────────────────────────────
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.cluster import KMeans
+
+def _row_text_from_other_cols(df, target_col):
+    other_cols = [c for c in df.columns if c != target_col]
+    joined = (
+        df[other_cols]
+        .astype(str)
+        .replace("nan", "", regex=False)
+        .replace("None", "", regex=False)
+        .agg(" ".join, axis=1)
+    )
+    return joined
+
+def guess_missing_with_clustering(df, target_col, output_dir, n_clusters=None, random_state=42):
+    col = target_col
+    series = df[col].astype(str)
+    is_missing = series.eq("") | series.str.lower().eq("nan") | df[col].isna()
+    is_known = ~is_missing
+    num_missing = int(is_missing.sum())
+    num_known = int(is_known.sum())
+    if num_missing == 0 or num_known < 5:
+        return df
+    text_for_all = _row_text_from_other_cols(df, target_col=col)
+    uniq_known = df.loc[is_known, col].astype(str).unique()
+    k_default = max(2, len(uniq_known))
+    if n_clusters is None:
+        n_clusters = min(max(k_default, 2), 20)
+    vectorizer = TfidfVectorizer(stop_words="english", max_features=5000)
+    X = vectorizer.fit_transform(text_for_all.fillna(""))
+    kmeans = KMeans(n_clusters=n_clusters, random_state=random_state, n_init=10)
+    cluster_labels = kmeans.fit_predict(X)
+    df[f"{col}_cluster_allcols"] = cluster_labels
+    cluster_to_label = {}
+    cluster_to_conf = {}
+    for cl in range(n_clusters):
+        idx = (cluster_labels == cl) & is_known
+        if idx.any():
+            maj = df.loc[idx, col].astype(str).value_counts(normalize=True)
+            top_label = maj.index[0]
+            top_conf = float(maj.iloc[0])
+            cluster_to_label[cl] = top_label
+            cluster_to_conf[cl] = top_conf
+        else:
+            global_maj = df.loc[is_known, col].astype(str).value_counts(normalize=True)
+            cluster_to_label[cl] = global_maj.index[0]
+            cluster_to_conf[cl] = float(global_maj.iloc[0])
+    guessed_labels = []
+    guessed_conf = []
+    for cl in cluster_labels:
+        guessed_labels.append(cluster_to_label[cl])
+        guessed_conf.append(cluster_to_conf[cl])
+    out_col = f"{col}_guessed"
+    df[out_col] = df[col].astype(str)
+    df.loc[is_missing, out_col] = np.array(guessed_labels, dtype=object)[is_missing.values]
+    def clean_name(s):
+        return "".join(ch if ch.isalnum() or ch in "-_." else "_" for ch in str(s))
+    report_path = os.path.join(output_dir, f"guessed_{clean_name(col)}.csv")
+    out_df = pd.DataFrame({
+        "row_index": np.arange(len(df)),
+        col: df[col].astype(str),
+        out_col: df[out_col].astype(str),
+        f"{col}_cluster": cluster_labels,
+        f"{col}_guess_confidence": guessed_conf,
+        "was_missing": is_missing.astype(int)
+    })
+    out_df.to_csv(report_path, index=False)
+    print(f" The missing values in '{col}' have been guessed. Saved: {report_path}")
+    return df
+
+def guess_missing_for_all_objects(df, output_dir, min_missing=1):
+    processed = []
+    for col in df.select_dtypes(include="object").columns:
+        s = df[col].astype(str)
+        miss_mask = s.eq("") | s.str.lower().eq("nan") | df[col].isna()
+        if miss_mask.sum() >= min_missing:
+            print(f"\n[Guessing] Column: {col} (missing={int(miss_mask.sum())})")
+            guess_missing_with_clustering(df, col, output_dir=output_dir)
+            processed.append(col)
+    return processed
+
 def main():
     args = parse_args()
     df = read_input_file(args.input_file)
@@ -116,7 +197,7 @@ def main():
     os.makedirs(args.output_dir, exist_ok=True)
     os.makedirs(args.combo_dir, exist_ok=True)
 
-    # Drop uninformative columns
+    # Drop the columns that have no information
     df, dropped_cols = drop_uninformative_columns(df)
     with open(os.path.join(args.output_dir, "dropped_columns.txt"), "w") as f:
         for col in dropped_cols:
@@ -150,6 +231,18 @@ def main():
     # Save updated dataframe with all new features
     df.to_csv(os.path.join(args.output_dir, "improved_metadata.csv"), index=False)
 
+    try:
+        os.makedirs(output_dir, exist_ok=True)
+        processed_cols = guess_missing_for_all_objects(df, output_dir=output_dir, min_missing=1)
+        if processed_cols:
+            guessed_all_path = os.path.join(output_dir, "data_with_guesses.csv")
+            df.to_csv(guessed_all_path, index=False)
+            print(f"\n  Dataframe has been written with columns properly guessed: {guessed_all_path}")
+        else:
+            print("\n  There are no columns that need values to guess.")
+    except Exception as e:
+        print(f"There is a problem with guessing categories: {e}")
+    
     print("✅ The new improvements have been completed:", args.output_dir)
 
 if __name__ == "__main__":

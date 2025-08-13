@@ -108,8 +108,6 @@ def cluster_combined_text(df):
     return model.fit_predict(X)
 
 # ─── the new improved script ──────────────────────────────────────────────────────────────────────
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.cluster import KMeans
 
 def _row_text_from_other_cols(df, target_col):
     other_cols = [c for c in df.columns if c != target_col]
@@ -285,29 +283,6 @@ category_rules = {
         "Antibiotic Resistant": ["resistance", "beta-lactamase", "multidrug", "bla", "mecA"]
     }
 }
-
-# ─── New utilizaitons  ────────────────────────────────────────────────────────────────
-def parse_args():
-    parser = argparse.ArgumentParser(description="Genome categorization tool")
-    parser.add_argument("input_file", help="Input .csv/.tsv (optionally .bz2 compressed) file")
-    parser.add_argument("--output-dir", default="categorized_output", help="Directory for category outputs")
-    parser.add_argument("--combo-dir", default="categorized_combinations", help="Directory for combo filters")
-    return parser.parse_args()
-
-def read_input_file(input_file):
-    if input_file.endswith(".bz2"):
-        with bz2.open(input_file, "rt") as f:
-            if input_file.endswith(".tsv.bz2"):
-                return pd.read_csv(f, sep="\t").fillna("")
-            else:
-                return pd.read_csv(f).fillna("")
-    elif input_file.endswith(".tsv"):
-        return pd.read_csv(input_file, sep="\t").fillna("")
-    else:
-        return pd.read_csv(input_file).fillna("")
-
-def clean_name(name: str) -> str:
-    return name.replace("(", "").replace(")", "").replace(" ", "_").replace("-", "_").replace("/", "_")
 
 # ─── the main part ─────────────────────────────────────────────────────────────────────
 def main():
